@@ -1,43 +1,56 @@
-# chatbot.py
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 import os
 import requests
 
 # -------------------- CONFIG --------------------
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 CHAT_MODEL = "deepseek-ai/DeepSeek-R1:fireworks-ai"
-BASE_URL = "https://router.huggingface.co/v1"
+API_URL = f"https://api-inference.huggingface.co/models/{CHAT_MODEL}"
+
+# -------------------- FASTAPI APP --------------------
+app = FastAPI(title="FlashPress Chatbot")
+
+# -------------------- REQUEST MODEL --------------------
+class ChatRequest(BaseModel):
+    message: str
+    context: str = None
 
 # -------------------- CHAT FUNCTION --------------------
 def chat_with_ai(message: str, context: str = None) -> str:
-    """
-    Sends a message to the DeepSeek-R1 chatbot and returns the AI response.
-    """
+    prompt = f"Context: {context}\nUser: {message}" if context else message
     headers = {
         "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
         "Content-Type": "application/json"
     }
-
     payload = {
-        "model": CHAT_MODEL,
-        "messages": [
-            {"role": "system", "content": "You are a helpful news assistant. Answer clearly and concisely."},
-            {"role": "user", "content": f"Context: {context}\nUser: {message}" if context else message}
-        ],
-        "temperature": 0.3,
-        "max_tokens": 500
+        "inputs": prompt,
+        "parameters": {
+            "temperature": 0.3,
+            "max_new_tokens": 500,
+        }
     }
+    
+    response = requests.post(API_URL, headers=headers, json=payload)
+    
+    if response.status_code != 200:
+        print("HuggingFace API error:", response.text)
+        return "AI chat model unavailable. Check your API key."
+    
+    data = response.json()
+    
+    # The HuggingFace model may return a list of dicts with 'generated_text'
+    if isinstance(data, list) and "generated_text" in data[0]:
+        return data[0]["generated_text"].strip()
+    else:
+        return "AI returned an empty response."
 
+# -------------------- ROUTE --------------------
+@app.post("/chat")
+async def chat_endpoint(chat_request: ChatRequest):
     try:
-        response = requests.post(f"{BASE_URL}/chat/completions", headers=headers, json=payload)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "").strip() or "AI returned an empty response."
-    except requests.exceptions.RequestException as e:
+        answer = chat_with_ai(chat_request.message, chat_request.context)
+        return {"reply": answer}
+    except Exception as e:
         print("Chat error:", e)
-        return "AI chat model unavailable. Check your API key or network connection."
-
-# -------------------- TEST --------------------
-if __name__ == "__main__":
-    user_input = input("You: ")
-    reply = chat_with_ai(user_input)
-    print("Bot:", reply)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
