@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}AI Summarizer - FlashPress News{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="text-center mb-4 fade-in">AI News Summarizer</h1>
+    
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <ul class="nav nav-pills mb-3" id="input-type-tabs">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#text-tab">Text</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#url-tab">URL</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#youtube-tab">YouTube</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pdf-tab">PDF</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="text-tab">
+                            <textarea class="form-control mb-3" id="text-input" rows="6" placeholder="Paste your text here..."></textarea>
+                            <button class="btn btn-primary w-100" onclick="summarizeText()">
+                                <i class="bi bi-lightning-fill"></i> Summarize Text
+                            </button>
+                        </div>
+
+                        <div class="tab-pane fade" id="url-tab">
+                            <input type="url" class="form-control mb-3" id="url-input" placeholder="Enter article URL...">
+                            <button class="btn btn-primary w-100" onclick="summarizeUrl()">
+                                <i class="bi bi-link-45deg"></i> Summarize URL
+                            </button>
+                        </div>
+
+                        <div class="tab-pane fade" id="youtube-tab">
+                            <input type="url" class="form-control mb-3" id="youtube-input" placeholder="Enter YouTube URL...">
+                            <button class="btn btn-primary w-100" onclick="summarizeYoutube()">
+                                <i class="bi bi-youtube"></i> Summarize Video
+                            </button>
+                        </div>
+
+                        <div class="tab-pane fade" id="pdf-tab">
+                            <input type="file" class="form-control mb-3" id="pdf-input" accept=".pdf">
+                            <input type="number" class="form-control mb-3" id="num-pages" placeholder="Number of pages to summarize" min="1" value="5">
+                            <button class="btn btn-primary w-100" onclick="summarizePdf()">
+                                <i class="bi bi-file-pdf"></i> Summarize PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loading-summary" class="text-center my-4" style="display: none;">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2">Generating summary...</p>
+            </div>
+
+            <div id="summary-result" class="card shadow-sm mt-4" style="display: none;">
+                <div class="card-body">
+                    <h5 class="card-title">Summary</h5>
+                    <p id="summary-text" class="card-text"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/summarizer.js') }}"></script>
+{% endblock %}

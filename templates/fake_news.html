@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Fake News Detector - FlashPress News{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="text-center mb-4 fade-in">Fake News Detector</h1>
+    
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <ul class="nav nav-pills mb-3">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#text-check">Text</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#url-check">URL</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="text-check">
+                            <textarea class="form-control mb-3" id="text-check-input" rows="6" placeholder="Paste text to verify..."></textarea>
+                            <button class="btn btn-primary w-100" onclick="checkText()">
+                                <i class="bi bi-shield-check"></i> Check Text
+                            </button>
+                        </div>
+
+                        <div class="tab-pane fade" id="url-check">
+                            <input type="url" class="form-control mb-3" id="url-check-input" placeholder="Enter news article URL...">
+                            <button class="btn btn-primary w-100" onclick="checkUrl()">
+                                <i class="bi bi-link-45deg"></i> Check URL
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loading-check" class="text-center my-4" style="display: none;">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2">Analyzing...</p>
+            </div>
+
+            <div id="check-result" class="card shadow-sm mt-4" style="display: none;">
+                <div class="card-body">
+                    <h5 class="card-title">Analysis Result</h5>
+                    <div class="alert" id="result-alert" role="alert">
+                        <h6 class="alert-heading" id="result-status"></h6>
+                        <p class="mb-0" id="result-message"></p>
+                        <small class="text-muted" id="result-confidence"></small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-info mt-4">
+                <h6>How it works:</h6>
+                <ul class="mb-0">
+                    <li><strong>URL Check:</strong> Verifies if the domain is from our list of trusted news sources</li>
+                    <li><strong>Text Check:</strong> Analyzes content for sensational indicators and patterns</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/fake_news.js') }}"></script>
+{% endblock %}
