@@ -113,19 +113,17 @@ def summarize_url():
 # ---------------------------
 # YOUTUBE SUMMARIZER (updated for latest library)
 # ---------------------------
-def _extract_video_id(url: str):
-    """Extract the YouTube video ID from various URL formats."""
-    if not url:
-        return None
+def extract_youtube_id(url):
+    """Extract video ID from any YouTube link."""
     patterns = [
         r'(?:v=|\/)([0-9A-Za-z_-]{11})',
         r'youtu\.be/([0-9A-Za-z_-]{11})',
         r'embed/([0-9A-Za-z_-]{11})'
     ]
-    for p in patterns:
-        m = re.search(p, url)
-        if m:
-            return m.group(1)
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
     return None
 
 @summarizer_bp.route('/youtube', methods=['POST'])
@@ -133,46 +131,38 @@ def summarize_youtube():
     try:
         data = request.json or {}
         url = data.get('url', '')
-        video_id = _extract_video_id(url)
-
+        video_id = extract_youtube_id(url)
+        
         if not video_id:
             return jsonify({'success': False, 'error': 'Invalid YouTube URL'}), 400
 
-        transcript_list = None
-        fetch_error = None
+        api_key = os.getenv('YOUTUBE_API_KEY')
+        if not api_key:
+            return jsonify({'success': False, 'error': 'Missing YouTube API key'}), 500
 
-        # Try legacy static API
-        try:
-            if hasattr(YouTubeTranscriptApi, 'get_transcript'):
-                transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-        except Exception as e:
-            fetch_error = e
+        # Fetch video details
+        yt_api_url = (
+            f"https://www.googleapis.com/youtube/v3/videos"
+            f"?part=snippet&id={video_id}&key={api_key}"
+        )
+        resp = requests.get(yt_api_url)
+        if resp.status_code != 200:
+            return jsonify({'success': False, 'error': f"YouTube API error {resp.status_code}"}), 500
 
-        # Try instance-based API (newer versions)
-        if transcript_list is None:
-            try:
-                api = YouTubeTranscriptApi()
-                if hasattr(api, 'fetch'):
-                    transcript_list = api.fetch(video_id)
-                else:
-                    tlist = YouTubeTranscriptApi.list_transcripts(video_id)
-                    transcript_list = tlist.find_transcript(['en']).fetch()
-            except Exception as e:
-                fetch_error = e
+        data = resp.json()
+        if not data.get('items'):
+            return jsonify({'success': False, 'error': 'Video not found or private'}), 404
 
-        if transcript_list is None:
-            return jsonify({'success': False, 'error': f'Could not fetch transcript: {fetch_error}'}), 500
+        snippet = data['items'][0]['snippet']
+        title = snippet.get('title', '')
+        description = snippet.get('description', '')
 
-        # Merge transcript text
-        transcript_text = ' '.join(
-            item.get('text', '') if isinstance(item, dict) else getattr(item, 'text', '')
-            for item in transcript_list
-        ).strip()
+        if not title and not description:
+            return jsonify({'success': False, 'error': 'No video metadata found'}), 404
 
-        if not transcript_text:
-            return jsonify({'success': False, 'error': 'Transcript is empty'}), 500
+        combined_text = f"{title}. {description}"
+        summary = summarize_with_huggingface(combined_text[:5000])
 
-        summary = summarize_with_huggingface(transcript_text[:5000])
         return jsonify({'success': True, 'summary': summary})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
