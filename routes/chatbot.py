@@ -5,7 +5,7 @@ import os
 chatbot_bp = Blueprint('chatbot', __name__)
 
 # -----------------------------------------
-# Basic predefined responses for common input
+# Basic Predefined Responses for Common Input
 # -----------------------------------------
 SIMPLE_RESPONSES = {
     'hello': "Hello! I'm the FlashPress News AI assistant. How can I help you today?",
@@ -40,83 +40,111 @@ def chat():
         if not message:
             return jsonify({'success': False, 'error': 'No message provided'}), 400
 
-        # 1️⃣ Check for simple responses first
+        # 1️⃣ Simple Response Check
         simple_response = get_simple_response(message)
         if simple_response:
             return jsonify({'success': True, 'response': simple_response})
 
-        # 2️⃣ Get Hugging Face API Key
+        # 2️⃣ API Setup
         api_key = os.getenv('HUGGINGFACE_API_KEY')
         if not api_key:
             return jsonify({'success': False, 'error': 'Missing Hugging Face API key'}), 500
 
-        # 3️⃣ Use a reliable conversational model
-        model_name = "microsoft/DialoGPT-medium"
-        API_URL = f"https://api-inference.huggingface.co/models/{model_name}"
+        # Models to try — both reliable conversational models
+        models_to_try = [
+            "microsoft/DialoGPT-medium",
+            "facebook/blenderbot-400M-distill"
+        ]
 
         headers = {"Authorization": f"Bearer {api_key}"}
-        payload = {
-            "inputs": {
-                "text": message
-            },
-            "parameters": {
-                "max_new_tokens": 200,
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "repetition_penalty": 1.1
-            },
-            "options": {"wait_for_model": True}
-        }
 
-        # 4️⃣ Make API call
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=25)
+        # 3️⃣ Try Multiple Models until one succeeds
+        for model_name in models_to_try:
+            API_URL = f"https://api-inference.huggingface.co/models/{model_name}"
 
-        # 5️⃣ Parse response
-        if response.status_code == 200:
-            result = response.json()
-            bot_response = None
+            payload = {
+                "inputs": message,
+                "parameters": {
+                    "max_new_tokens": 200,
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                    "repetition_penalty": 1.1
+                },
+                "options": {"wait_for_model": True}
+            }
 
-            if isinstance(result, list) and len(result) > 0:
-                bot_response = result[0].get('generated_text', '')
-            elif isinstance(result, dict):
-                bot_response = result.get('generated_text', result.get('summary', ''))
+            try:
+                response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
 
-            if bot_response:
-                bot_response = bot_response.replace('<|endoftext|>', '').strip()
+                if response.status_code == 200:
+                    result = response.json()
+                    bot_response = extract_bot_response(result, message)
 
-                # Prevent echoing user message
-                if bot_response.lower().startswith(message.lower()):
-                    bot_response = bot_response[len(message):].strip()
+                    if bot_response and len(bot_response) > 3:
+                        return jsonify({'success': True, 'response': bot_response})
 
-                if len(bot_response) > 3:
-                    return jsonify({'success': True, 'response': bot_response})
+                elif response.status_code == 503:
+                    # Model still loading, try next one
+                    continue
 
-        # 6️⃣ Fallback intelligent response
+            except requests.Timeout:
+                continue
+            except Exception:
+                continue
+
+        # 4️⃣ Fallback if both models fail
         return jsonify({'success': True, 'response': generate_fallback_response(message)})
 
-    except requests.Timeout:
-        return jsonify({'success': False, 'error': 'The model took too long to respond. Please try again.'})
     except Exception as e:
         return jsonify({'success': False, 'error': f'Error: {str(e)}'})
 
 
 # -----------------------------------------
-# Fallback Response (when model is slow/offline)
+# Extract AI Response from HF JSON
+# -----------------------------------------
+def extract_bot_response(result, user_message):
+    """
+    Safely extracts the generated text from various Hugging Face model formats
+    """
+    if isinstance(result, list) and len(result) > 0:
+        if "generated_text" in result[0]:
+            text = result[0]["generated_text"]
+        elif "text" in result[0]:
+            text = result[0]["text"]
+        else:
+            text = ""
+    elif isinstance(result, dict):
+        text = result.get("generated_text", result.get("text", ""))
+    else:
+        text = ""
+
+    # Clean response
+    text = text.replace("<|endoftext|>", "").strip()
+
+    # Remove user echo if present
+    if text.lower().startswith(user_message.lower()):
+        text = text[len(user_message):].strip()
+
+    return text
+
+
+# -----------------------------------------
+# Fallback Smart Responses
 # -----------------------------------------
 def generate_fallback_response(message):
     msg_lower = message.lower()
 
-    # Handle question forms
+    # Question-based
     if '?' in message:
-        return "That's a great question! Please try again in a moment — my AI engine is reconnecting."
+        return "That's a good question! Could you please try again in a moment? The AI might be reconnecting."
 
-    # Topic-based guidance
+    # Topic-based
     if 'news' in msg_lower:
-        return "You can browse the latest verified stories right on FlashPress News!"
+        return "You can explore the latest verified stories right on FlashPress News!"
     if 'summarize' in msg_lower or 'summary' in msg_lower:
         return "Try our AI Summarizer — it can summarize articles, PDFs, and even YouTube videos."
     if 'fake' in msg_lower or 'real' in msg_lower or 'trust' in msg_lower:
-        return "You can use the Fake News Detector to verify if a story is authentic."
+        return "Use the Fake News Detector to check if a story is authentic."
 
-    # Default fallback
-    return "I'm here to chat about the latest news and updates! Could you rephrase or ask something else?"
+    # Default friendly fallback
+    return "I'm still learning from the latest FlashPress data! Could you rephrase your question or ask about something else?"
