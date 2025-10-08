@@ -11,7 +11,7 @@ chatbot_bp = Blueprint('chatbot', __name__)
 SIMPLE_RESPONSES = {
     'hello': "Hello! I'm the FlashPress News AI assistant. How can I help you today?",
     'hi': "Hi there! What would you like to know about?",
-    'how are you': "I'm functioning well, thank you! How can I help you?",
+    'how are you': "I'm functioning well, thank you! I'm here to help answer your questions.",
     'what is your name': "I'm the FlashPress News AI assistant, powered by advanced language models.",
     'who are you': "I'm an AI chatbot integrated into FlashPress News to help answer your questions.",
     'help': "I can help you with general questions, provide information, and have conversations. What would you like to know?",
@@ -39,35 +39,38 @@ def chat():
         if not message:
             return jsonify({'success': False, 'error': 'No message provided'}), 400
 
-        # 1️⃣ Simple predefined responses
+        # 1️⃣ Check simple responses first
         simple_response = get_simple_response(message)
         if simple_response:
             return jsonify({'success': True, 'response': simple_response})
 
-        # 2️⃣ Hugging Face API call
+        # 2️⃣ Hugging Face Chat API
         api_key = os.getenv('HUGGINGFACE_API_KEY')
         if not api_key:
             return jsonify({'success': False, 'error': 'Missing Hugging Face API key'}), 500
 
-        model_name = "gpt2"  # Change to your preferred model if needed
-        API_URL = f"https://api-inference.huggingface.co/models/{model_name}"
-        headers = {"Authorization": f"Bearer {api_key}"}
+        API_URL = "https://router.huggingface.co/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
 
         payload = {
-            "inputs": message,
-            "parameters": {
-                "max_new_tokens": 250,
-                "temperature": 0.7,
-                "top_p": 0.9
-            },
-            "options": {"wait_for_model": True}
+            "model": "gpt-4",  # Change to your preferred chat model
+            "messages": [
+                {"role": "system", "content": "You are a helpful news assistant. Answer clearly and concisely."},
+                {"role": "user", "content": message}
+            ],
+            "temperature": 0.3,
+            "max_tokens": 500
         }
 
         try:
-            response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+            response = requests.post(API_URL, headers=headers, data=json.dumps(payload), timeout=30)
             if response.status_code == 200:
                 result = response.json()
-                bot_response = extract_bot_response(result, message)
+                # Extract the AI response
+                bot_response = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
                 if bot_response:
                     return jsonify({'success': True, 'response': bot_response})
             else:
@@ -82,26 +85,6 @@ def chat():
 
     except Exception as e:
         return jsonify({'success': False, 'error': f'Error: {str(e)}'})
-
-
-# -----------------------------
-# Extract AI Response
-# -----------------------------
-def extract_bot_response(result, user_message):
-    """
-    Extracts generated text from HF model responses
-    """
-    text = ""
-    if isinstance(result, list) and len(result) > 0:
-        text = result[0].get("generated_text", "")
-    elif isinstance(result, dict):
-        text = result.get("generated_text", "")
-    
-    # Clean response
-    text = text.replace("<|endoftext|>", "").strip()
-    if text.lower().startswith(user_message.lower()):
-        text = text[len(user_message):].strip()
-    return text
 
 # -----------------------------
 # Fallback Responses
