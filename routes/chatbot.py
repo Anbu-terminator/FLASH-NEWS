@@ -48,7 +48,7 @@ def chat():
             return jsonify({'success': False, 'error': 'Missing Hugging Face API key'}), 500
 
         # 2️⃣ Use a reliable conversational model
-        model_name = "facebook/blenderbot-400M-distill"
+        model_name = "deepseek-ai/DeepSeek-R1:fireworks-ai"
         API_URL = f"https://api-inference.huggingface.co/models/{model_name}"
         headers = {"Authorization": f"Bearer {api_key}"}
         payload = {
